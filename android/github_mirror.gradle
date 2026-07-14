@@ -1,0 +1,47 @@
+// GitHub release/asset 下载镜像配置。
+// 在 gradle.properties 中设置 githubMirrorPrefix 切换镜像，例如：
+//   githubMirrorPrefix=https://ghfast.top/
+//   githubMirrorPrefix=https://ghproxy.net/
+//   githubMirrorPrefix=https://mirror.ghproxy.com/
+ext {
+    githubMirrorPrefix = (findProperty('githubMirrorPrefix') ?: 'https://ghfast.top/').toString()
+    mirrorGithubUrl = { String url ->
+        if (url == null || url.isEmpty()) {
+            return url
+        }
+        if (url.startsWith('https://github.com/') || url.startsWith('http://github.com/')) {
+            def normalized = url.replace('http://github.com/', 'https://github.com/')
+            def prefix = githubMirrorPrefix.endsWith('/')
+                ? githubMirrorPrefix
+                : "${githubMirrorPrefix}/"
+            return "${prefix}${normalized}"
+        }
+        return url
+    }
+}
+
+gradle.beforeProject { project ->
+    def buildFile = project.buildFile
+    if (buildFile == null || !buildFile.exists()) {
+        return
+    }
+
+    def text = buildFile.getText('UTF-8')
+    if (!text.contains('https://github.com/')) {
+        return
+    }
+    if (text.contains('mirrorGithubUrl') ||
+        text.contains('ghfast.top') ||
+        text.contains('ghproxy')) {
+        return
+    }
+
+    def prefix = githubMirrorPrefix.endsWith('/')
+        ? githubMirrorPrefix
+        : "${githubMirrorPrefix}/"
+    def patched = text.replace('https://github.com/', "${prefix}https://github.com/")
+    if (patched != text) {
+        buildFile.setText(patched, 'UTF-8')
+        println "[github_mirror] Patched GitHub URLs in ${buildFile}"
+    }
+}

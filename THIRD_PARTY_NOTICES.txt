@@ -1,0 +1,43 @@
+Third-Party Notices for DiuBangFileS (Android NASServer)
+=========================================================
+
+This application is licensed under the MIT License (see LICENSE).
+Release APKs may bundle separately licensed native components listed below.
+
+libmpv (LGPL v2.1+)
+-------------------
+- Component: libmpv Android libraries (in-process video preview via media_kit)
+- Source: media-kit/media-kit and media-kit/libmpv-android-video-build
+  https://github.com/media-kit/media-kit
+- Vendored plugin path (when used): third_party/media_kit_libs_android_video
+- License: GNU Lesser General Public License v2.1 or later
+  https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+- Usage: In-process playback for local preview; not used for server-side HLS on Android.
+
+Bouncy Castle (MIT-style / BC license)
+--------------------------------------
+- Component: org.bouncycastle:bcprov-jdk18on (TLS / crypto on Android)
+- License: Bouncy Castle Licence
+  https://www.bouncycastle.org/licence.html
+
+SQLite
+------
+- Component: sqflite / sqlite3 native bindings
+- License: SQLite is public domain; bindings follow their upstream licenses.
+
+Flutter Engine (BSD 3-Clause)
+-----------------------------
+- License: BSD 3-Clause License
+  https://github.com/flutter/flutter/blob/master/LICENSE
+
+Other Dart / Flutter plugins
+----------------------------
+Most remaining dependencies are MIT, BSD, or Apache-2.0 licensed.
+See pubspec.yaml and pubspec.lock for package names and upstream repositories.
+Run `flutter pub licenses` for a full dependency license report.
+
+Source code offers
+------------------
+For LGPL components (libmpv), source code is available from the upstream
+project URLs above. Written offers may be directed to the repository maintainer
+listed on https://github.com/DianDanHuaJuan/diubangNASServer_Android
