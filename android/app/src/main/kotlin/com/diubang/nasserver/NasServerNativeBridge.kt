@@ -41,13 +41,11 @@ class NasServerNativeBridge(
         private const val POWER_MANAGEMENT_CHANNEL =
             "com.diubang.nasserver/power_management"
         private const val MEDIA_CHANGE_CHANNEL = "com.diubang.nasserver/media_change"
-        private const val TLS_CHANNEL = "com.diubang.nasserver/tls"
     }
 
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
     private val nsdManager = appContext.getSystemService(Context.NSD_SERVICE) as NsdManager
-    private val nativeTlsMaterialService = NativeTlsMaterialService(appContext)
 
     private var registrationListener: NsdManager.RegistrationListener? = null
     private var registeredServiceName: String? = null
@@ -198,44 +196,6 @@ class NasServerNativeBridge(
 
                 "openAppManagementSettings" -> {
                     result.success(openAppManagementSettings())
-                }
-
-                else -> {
-                    result.notImplemented()
-                }
-            }
-        }
-
-        MethodChannel(messenger, TLS_CHANNEL).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "ensureTlsMaterial" -> {
-                    val serverId = call.argument<String>("serverId")?.trim().orEmpty()
-                    val hostLabel = call.argument<String>("hostLabel")?.trim().orEmpty()
-                    val localIp = call.argument<String>("localIp")?.trim().orEmpty()
-
-                    if (serverId.isEmpty() || hostLabel.isEmpty() || localIp.isEmpty()) {
-                        result.error(
-                            "INVALID_TLS_REQUEST",
-                            "serverId, hostLabel and localIp are required",
-                            null,
-                        )
-                    } else {
-                        try {
-                            result.success(
-                                nativeTlsMaterialService.ensureTlsMaterial(
-                                    serverId = serverId,
-                                    hostLabel = hostLabel,
-                                    localIp = localIp,
-                                ),
-                            )
-                        } catch (error: Exception) {
-                            result.error(
-                                "TLS_GENERATION_ERROR",
-                                error.message ?: "Failed to ensure TLS material",
-                                null,
-                            )
-                        }
-                    }
                 }
 
                 else -> {

@@ -14,12 +14,6 @@ libmpv (LGPL v2.1+)
   https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
 - Usage: In-process playback for local preview; not used for server-side HLS on Android.
 
-Bouncy Castle (MIT-style / BC license)
---------------------------------------
-- Component: org.bouncycastle:bcprov-jdk18on (TLS / crypto on Android)
-- License: Bouncy Castle Licence
-  https://www.bouncycastle.org/licence.html
-
 SQLite
 ------
 - Component: sqflite / sqlite3 native bindings

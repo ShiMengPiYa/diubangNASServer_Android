@@ -30,7 +30,7 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/
+**/build/
 /coverage/
 
 # Symbolication related
@@ -60,6 +60,9 @@ key.properties
 # Local debug logs
 server_debug.log
 
-# Android Gradle / Kotlin local caches
-android/.gradle/
-android/.kotlin/
+# Android Gradle / Kotlin / NDK local caches (app + third_party plugins)
+**/.gradle/
+**/.kotlin/
+**/.cxx/
+**/captures/
+**/local.properties

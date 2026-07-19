@@ -1,13 +1,26 @@
-// GitHub release/asset 下载镜像配置。
-// 在 gradle.properties 中设置 githubMirrorPrefix 切换镜像，例如：
-//   githubMirrorPrefix=https://ghfast.top/
-//   githubMirrorPrefix=https://ghproxy.net/
-//   githubMirrorPrefix=https://mirror.ghproxy.com/
+// GitHub release/asset 下载镜像与本机代理配置。
+// 在 gradle.properties 中设置：
+//   localProxyEnabled=true|false
+//   localProxyHost=127.0.0.1
+//   localProxyPort=7890
+//   githubMirrorPrefix=https://ghproxy.net/   （代理开启时忽略）
 ext {
-    githubMirrorPrefix = (findProperty('githubMirrorPrefix') ?: 'https://ghfast.top/').toString()
+    localProxyEnabled = (findProperty('localProxyEnabled') ?: 'false').toString().equalsIgnoreCase('true')
+    localProxyHost = (findProperty('localProxyHost') ?: '127.0.0.1').toString().trim()
+    localProxyPort = (findProperty('localProxyPort') ?: '7890').toString().trim()
+    githubMirrorPrefix = (findProperty('githubMirrorPrefix') ?: '').toString().trim()
+
+    isLocalProxyEnabled = { -> localProxyEnabled }
+
     mirrorGithubUrl = { String url ->
         if (url == null || url.isEmpty()) {
             return url
+        }
+        if (localProxyEnabled) {
+            return null
+        }
+        if (githubMirrorPrefix.isEmpty()) {
+            return null
         }
         if (url.startsWith('https://github.com/') || url.startsWith('http://github.com/')) {
             def normalized = url.replace('http://github.com/', 'https://github.com/')
@@ -21,6 +34,13 @@ ext {
 }
 
 gradle.beforeProject { project ->
+    if (localProxyEnabled) {
+        return
+    }
+    if (githubMirrorPrefix.isEmpty()) {
+        return
+    }
+
     def buildFile = project.buildFile
     if (buildFile == null || !buildFile.exists()) {
         return

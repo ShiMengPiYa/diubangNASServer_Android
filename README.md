@@ -38,7 +38,7 @@
    flutter pub get
    ```
 
-3. **首次构建说明：** Android 构建会通过 Gradle 拉取 [media_kit](https://github.com/media-kit/media-kit) 所需的 libmpv 原生库（见 `third_party/media_kit_libs_android_video`）。建议先运行 `.\tool\bootstrap_media_kit_android.ps1` 预下载并校验；若 GitHub 下载较慢，可在 `android/gradle.properties` 中调整 `githubMirrorPrefix`（详见 [CONTRIBUTING.md](CONTRIBUTING.md)）。
+3. **首次构建说明：** Android 构建会通过 Gradle 拉取 [media_kit](https://github.com/media-kit/media-kit) 所需的 libmpv 原生库（见 `third_party/media_kit_libs_android_video`）。建议先运行 `.\tool\bootstrap_media_kit_android.ps1` 预下载并校验；若 GitHub 下载较慢或失败，可在 `android/gradle.properties` 将 `localProxyEnabled=true`（走本机 Clash 等），或调整 `githubMirrorPrefix`（详见 [CONTRIBUTING.md](CONTRIBUTING.md)）。
 
 4. 连接设备并运行：
 
@@ -67,8 +67,9 @@ flutter build apk --release
 
 | 现象 | 处理 |
 |------|------|
-| media_kit / libmpv 下载失败、MD5 mismatch、`zip file is empty` | 先运行 `.\tool\bootstrap_media_kit_android.ps1 -Force`；再调整 `android/gradle.properties` 的 `githubMirrorPrefix`（或留空直连 GitHub）；`flutter clean` 后重试 |
-| Gradle 分发包下载慢 | `gradle-wrapper.properties` 使用镜像；或配置代理 |
+| media_kit / libmpv 下载失败、MD5 mismatch、`zip file is empty` | 先运行 `.\tool\bootstrap_media_kit_android.ps1 -Force`；或在 `android/gradle.properties` 设 `localProxyEnabled=true`（本机 Clash 等 HTTP 端口，默认 `127.0.0.1:7890`）后重试；也可调整 `githubMirrorPrefix`（或留空直连 GitHub）；`flutter clean` 后重试 |
+| Gradle / GitHub 下载需走本机代理 | 将 `android/gradle.properties` 中 `localProxyEnabled` 改为 `true`，`localProxyPort` 填 Clash 等的 **HTTP/mixed** 端口（勿填 SOCKS）；构建日志出现 `[localProxy] enabled …` / `downloading via …` 即表示生效。若本机已用 TUN，可不依赖此开关 |
+| Gradle 分发包下载慢 | `gradle-wrapper.properties` 使用镜像；或开启上述 `localProxyEnabled` |
 | `flutter pub get` 失败 | 检查 Flutter/Dart 版本与 `pubspec.yaml` 中 `^3.10.7` 一致 |
 | Release APK 无法安装 | 确认未混用 debug 签名；自行配置 `key.properties` 与 release keystore |
 
@@ -94,7 +95,6 @@ flutter build apk --release
 本仓库源码为 [MIT](LICENSE)。Release 构建另含以下组件（详见 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)）：
 
 - [libmpv](https://github.com/media-kit/media-kit) — 本地视频预览（Android media_kit 原生库，LGPL v2.1+）
-- [Bouncy Castle](https://www.bouncycastle.org/) — Android TLS 相关（`bcprov-jdk18on`）
 
 ## 安全
 

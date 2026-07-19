@@ -33,13 +33,27 @@ Force re-download after a failed build:
 .\tool\bootstrap_media_kit_android.ps1 -Force
 ```
 
-If downloads are slow or blocked, set a mirror prefix in `android/gradle.properties`:
+### Local HTTP proxy (one-line switch)
+
+Java/Gradle does not use the OS system proxy by default. To route Gradle and the bootstrap script through Clash / V2RayN (or similar) on this machine, flip one flag in `android/gradle.properties`:
 
 ```properties
-githubMirrorPrefix=https://ghfast.top/
+localProxyEnabled=true
+localProxyHost=127.0.0.1
+localProxyPort=7890
 ```
 
-Other mirrors: `https://ghproxy.net/` · `https://mirror.ghproxy.com/` · leave empty for direct GitHub.
+Set `localProxyEnabled=false` to turn it off. Set `localProxyPort` to your client's **HTTP or mixed** port (not SOCKS). When enabled, Gradle dependency resolution and libmpv JAR downloads both use that proxy to reach `github.com` directly (mirror prefix is ignored). A TUN-mode VPN can make this switch unnecessary.
+
+### GitHub mirror prefix (no local proxy)
+
+If downloads are slow or blocked and you are not using `localProxyEnabled`, set a mirror prefix in `android/gradle.properties`:
+
+```properties
+githubMirrorPrefix=https://ghproxy.net/
+```
+
+Other mirrors: `https://ghfast.top/` · `https://mirror.ghproxy.com/` · leave empty for direct GitHub.
 
 Gradle itself may use a regional mirror in `gradle-wrapper.properties`; adjust for your network if needed.
 

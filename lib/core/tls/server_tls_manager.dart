@@ -60,7 +60,7 @@ class ServerTlsManager {
   ServerTlsManager({
     ServerTlsNativeDataSource? nativeDataSource,
   }) : _nativeDataSource =
-           nativeDataSource ?? MethodChannelServerTlsNativeDataSource();
+           nativeDataSource ?? FileBackedServerTlsNativeDataSource();
 
   final ServerTlsNativeDataSource _nativeDataSource;
 
