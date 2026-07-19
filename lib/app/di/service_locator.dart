@@ -730,16 +730,25 @@ class ServiceLocator {
         port: port,
         startedAt: _startedAt!,
       );
+      final enrolledDeviceIdsProvider = () async {
+        final devices = await deviceStore.listDevices();
+        return devices
+            .where((device) => device.status == DeviceStatus.active)
+            .map((device) => device.deviceId)
+            .toList(growable: false);
+      };
       final realtimeSnapshotBuilder = RealtimeSnapshotBuilder(
         dashboardPayloadBuilder: dashboardPayloadBuilder,
         presenceRepository: realtimePresenceRepository!,
         relayService: relayService,
+        enrolledDeviceIdsProvider: enrolledDeviceIdsProvider,
       );
       realtimeStatusPublisher = RealtimeStatusPublisher(
         connectionRegistry: realtimeConnectionRegistry!,
         eventHub: realtimeEventHub!,
         dashboardPayloadBuilder: dashboardPayloadBuilder,
         presenceRepository: realtimePresenceRepository!,
+        enrolledDeviceIdsProvider: enrolledDeviceIdsProvider,
       );
       realtimeStatusPublisher!.start();
       unawaited(
