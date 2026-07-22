@@ -107,11 +107,13 @@ import '../../features/media_library/data/repositories/media_library_repository_
 import '../../features/media_library/data/cache/media_library_cache.dart';
 import '../../features/media_library/data/services/media_change_service.dart';
 import '../../features/server/data/datasources/foreground_service_data_source.dart';
+import '../../core/device_registry/device_registry_admin.dart';
 
 class ServiceLocator {
   static late final SharedPreferences _prefs;
   static late final OwnerCredentialStore ownerCredentialStore;
   static late final DeviceStore deviceStore;
+  static DeviceRegistryAdmin? _deviceRegistryAdmin;
   static AuthSessionStore? authSessionStore;
   static late final KeyValueStore keyValueStore;
   static late final FileSystemService fileSystemService;
@@ -181,6 +183,19 @@ class ServiceLocator {
       deviceInfoService: deviceInfoService,
       presenceRepository: realtimePresenceRepository,
       onBroadcastNameChanged: _onBroadcastNameCandidate,
+    );
+  }
+
+  static DeviceRegistryAdmin get deviceRegistryAdmin {
+    return _deviceRegistryAdmin ??= DeviceRegistryAdmin(
+      deviceStore: deviceStore,
+      ownsServerRuntime: () => realtimeStatusPublisher != null,
+      isForegroundServiceRunning: () async {
+        if (!AppPlatform.supportsForegroundService) {
+          return false;
+        }
+        return foregroundServiceDataSource.isForegroundServiceRunning();
+      },
     );
   }
 
@@ -731,7 +746,8 @@ class ServiceLocator {
         startedAt: _startedAt!,
       );
       final enrolledDeviceIdsProvider = () async {
-        final devices = await deviceStore.listDevices();
+        final devices =
+            await serverDeviceIdentityService.listEnrolledClientDevices();
         return devices
             .where((device) => device.status == DeviceStatus.active)
             .map((device) => device.deviceId)
@@ -878,10 +894,19 @@ class ServiceLocator {
       final deviceApiHandler = DeviceApiHandler(
         deviceStore: deviceStore,
         avatarStore: deviceAvatarStore,
+        hostDeviceIdProvider: () async {
+          final host = await serverDeviceIdentityService.resolveHostDevice();
+          return host?.deviceId;
+        },
+        isOnlineProvider: (deviceId) =>
+            realtimePresenceRepository?.isOnline(deviceId) ?? false,
       );
       final deviceProfileApiHandler = DeviceProfileApiHandler(
         deviceStore: deviceStore,
         avatarStore: deviceAvatarStore,
+        onProfileChanged: () {
+          realtimeStatusPublisher?.publishPresenceChanged();
+        },
       );
       final authRouter = AuthRouter(
         authSessionHandler: authSessionHandler,
