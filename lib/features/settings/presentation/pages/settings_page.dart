@@ -49,6 +49,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _settingsApplyStatus = ServiceLocator.settingsApplyStatus.value;
     ServiceLocator.settingsApplyStatus.addListener(_onSettingsApplyStatusChanged);
     widget.settingsCubit.loadSettings();
+    _loadOwnerInfo();
   }
 
   void _onSettingsApplyStatusChanged() {
@@ -177,6 +178,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       child: ServerDeviceIdentityCard(),
                     ),
                     const SizedBox(height: sectionSpacing),
+                    _buildAccountManagementCard(),
+                    const SizedBox(height: sectionSpacing),
                     if (useTwoColumns) ...[
                       if (AppPlatform.supportsCustomStoragePath)
                         _buildDesktopCardRow(
@@ -245,8 +248,8 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 4),
         Text(
           AppPlatform.supportsCustomStoragePath
-              ? '配置共享目录、服务参数与网络地址。'
-              : '配置服务参数与网络地址。',
+              ? '配置管理员账户、共享目录、服务参数与网络地址。'
+              : '配置管理员账户、服务参数与网络地址。',
           style: const TextStyle(
             fontSize: 12,
             color: AppTheme.lightSecondaryText,
@@ -352,19 +355,15 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // Retained for future account-management entry points.
-  // ignore: unused_element
   Widget _buildAccountManagementCard() {
     return _buildSettingsCard(
       title: '账户管理',
-      subtitle: '管理员凭据管理',
+      subtitle: '管理员登录凭据（用于客户端账密接入）',
       icon: Icons.admin_panel_settings_outlined,
       iconColor: AppTheme.accentColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildInfoRow('角色', 'owner'),
-          const SizedBox(height: 6),
           _buildInfoRow('账号', _ownerUsername ?? '--'),
           const SizedBox(height: 6),
           _buildInfoRow(
@@ -378,15 +377,6 @@ class _SettingsPageState extends State<SettingsPage> {
             label: const Text('修改用户名和密码'),
             style: _outlineActionButtonStyle(),
           ),
-          if (_isDefaultOwnerCredential) ...[
-            const SizedBox(height: 10),
-            _buildInlineNote(
-              icon: Icons.warning_amber_rounded,
-              text: '当前仍使用默认凭据 admin / admin，请尽快修改。',
-              backgroundColor: AppTheme.warningContainer,
-              iconColor: AppTheme.warningColor,
-            ),
-          ],
         ],
       ),
     );
@@ -446,7 +436,7 @@ class _SettingsPageState extends State<SettingsPage> {
         password: request.currentPassword,
       );
       if (!isCurrentCredentialValid) {
-        throw StateError('当前 owner 密码不正确');
+        throw StateError('当前管理员密码不正确');
       }
 
       await store.updateOwnerCredential(
@@ -570,17 +560,6 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 8),
         child,
       ],
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w600,
-        color: AppTheme.lightCardForeground,
-      ),
     );
   }
 
@@ -950,15 +929,15 @@ class _OwnerCredentialUpdateDialogState
     final confirmPassword = _confirmPasswordController.text;
 
     if (newUsername.isEmpty) {
-      setState(() => _errorMessage = 'owner 用户名不能为空');
+      setState(() => _errorMessage = '管理员用户名不能为空');
       return;
     }
     if (currentPassword.isEmpty) {
-      setState(() => _errorMessage = '请输入当前 owner 密码');
+      setState(() => _errorMessage = '请输入当前管理员密码');
       return;
     }
     if (newPassword.isEmpty) {
-      setState(() => _errorMessage = '请输入新的 owner 密码');
+      setState(() => _errorMessage = '请输入新的管理员密码');
       return;
     }
     if (newPassword != confirmPassword) {
@@ -980,7 +959,7 @@ class _OwnerCredentialUpdateDialogState
     return Theme(
       data: AppTheme.settingsDialogTheme(context),
       child: AlertDialog(
-        title: const Text('修改 owner 用户名和密码'),
+        title: const Text('修改管理员用户名和密码'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -988,7 +967,7 @@ class _OwnerCredentialUpdateDialogState
               TextField(
                 controller: _usernameController,
                 decoration: const InputDecoration(
-                  labelText: '新的 owner 用户名',
+                  labelText: '新的管理员用户名',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -997,7 +976,7 @@ class _OwnerCredentialUpdateDialogState
                 controller: _currentPasswordController,
                 obscureText: true,
                 decoration: const InputDecoration(
-                  labelText: '当前 owner 密码',
+                  labelText: '当前管理员密码',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -1006,7 +985,7 @@ class _OwnerCredentialUpdateDialogState
                 controller: _newPasswordController,
                 obscureText: true,
                 decoration: const InputDecoration(
-                  labelText: '新的 owner 密码',
+                  labelText: '新的管理员密码',
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -1015,7 +994,7 @@ class _OwnerCredentialUpdateDialogState
                 controller: _confirmPasswordController,
                 obscureText: true,
                 decoration: const InputDecoration(
-                  labelText: '确认新的 owner 密码',
+                  labelText: '确认新的管理员密码',
                   border: OutlineInputBorder(),
                 ),
                 onSubmitted: (_) => _submit(),

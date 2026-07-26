@@ -7,6 +7,7 @@ import 'package:shelf_router/shelf_router.dart';
 import '../../../core/auth/account_models.dart';
 import '../../../core/auth/auth_session_store.dart';
 import '../../../core/auth/request_authorization.dart';
+import '../../../core/debug/avatar_diag_log.dart';
 import '../../../core/device_registry/device_avatar_store.dart';
 import '../../../core/device_registry/device_label_constraints.dart';
 import '../../../core/device_registry/device_models.dart';
@@ -104,12 +105,23 @@ class DeviceProfileApiHandler {
       return authError;
     }
     final authContext = _requireDeviceContext(request)!;
+    final deviceId = authContext.deviceId!;
+    final contentLength = request.headers['content-length'];
 
     final bytes = await request.read().expand((chunk) => chunk).toList();
+    final priorUpdatedAt = await _avatarStore.readUpdatedAt(deviceId);
+    logAvatarDiag(
+      'PUT begin deviceId=$deviceId contentLength=${contentLength ?? 'null'} '
+      'bodyBytes=${bytes.length} looksLikeImage=${_looksLikeImage(bytes)} '
+      'priorUpdatedAt=${priorUpdatedAt?.toIso8601String() ?? 'null'} '
+      'onProfileChangedWired=${_onProfileChanged != null}',
+    );
     if (bytes.isEmpty) {
+      logAvatarDiag('PUT reject deviceId=$deviceId reason=empty_body');
       return _error(400, 'INVALID_BODY', 'Avatar body must not be empty');
     }
     if (!_looksLikeImage(bytes)) {
+      logAvatarDiag('PUT reject deviceId=$deviceId reason=not_image');
       return _error(
         400,
         'INVALID_AVATAR',
@@ -119,19 +131,39 @@ class DeviceProfileApiHandler {
 
     try {
       final updatedAt = await _avatarStore.saveAvatar(
-        deviceId: authContext.deviceId!,
+        deviceId: deviceId,
         bytes: bytes,
       );
+      final advanced =
+          priorUpdatedAt == null || updatedAt.isAfter(priorUpdatedAt);
+      final willNotify = _onProfileChanged != null;
       _onProfileChanged?.call();
+      logAvatarDiag(
+        'PUT ok deviceId=$deviceId avatarUpdatedAt=${updatedAt.toIso8601String()} '
+        'advanced=$advanced onProfileChanged=$willNotify',
+      );
       return Response.ok(
         jsonEncode({
-          'deviceId': authContext.deviceId,
+          'deviceId': deviceId,
           'avatarUpdatedAt': updatedAt.toIso8601String(),
         }),
         headers: _jsonHeaders(),
       );
     } on ArgumentError catch (error) {
+      logAvatarDiag(
+        'PUT reject deviceId=$deviceId type=ArgumentError '
+        'message=${error.message}',
+        error: error,
+      );
       return _error(400, 'INVALID_AVATAR', error.message?.toString() ?? 'Invalid avatar');
+    } catch (error, stackTrace) {
+      // Behavior unchanged: still rethrow so we can confirm connection aborts.
+      logAvatarDiag(
+        'PUT FAIL deviceId=$deviceId type=${error.runtimeType} error=$error',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
     }
   }
 
@@ -141,10 +173,28 @@ class DeviceProfileApiHandler {
       return authError;
     }
     final authContext = _requireDeviceContext(request)!;
+    final deviceId = authContext.deviceId!;
 
-    await _avatarStore.deleteAvatar(authContext.deviceId!);
-    _onProfileChanged?.call();
-    return Response(204, headers: _jsonHeaders());
+    try {
+      logAvatarDiag(
+        'DELETE begin deviceId=$deviceId '
+        'onProfileChangedWired=${_onProfileChanged != null}',
+      );
+      await _avatarStore.deleteAvatar(deviceId);
+      final willNotify = _onProfileChanged != null;
+      _onProfileChanged?.call();
+      logAvatarDiag(
+        'DELETE ok deviceId=$deviceId onProfileChanged=$willNotify',
+      );
+      return Response(204, headers: _jsonHeaders());
+    } catch (error, stackTrace) {
+      logAvatarDiag(
+        'DELETE FAIL deviceId=$deviceId type=${error.runtimeType} error=$error',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
   }
 
   AuthenticatedRequestContext? _requireDeviceContext(Request request) {

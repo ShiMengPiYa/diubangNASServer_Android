@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
 import '../../../core/auth/account_models.dart';
 import '../../../core/auth/request_authorization.dart';
+import '../../../core/debug/avatar_diag_log.dart';
 import '../../../core/device_registry/device_avatar_store.dart';
 import '../../../core/device_registry/device_label_constraints.dart';
 import '../../../core/device_registry/device_models.dart';
@@ -142,17 +144,53 @@ class DeviceApiHandler {
 
     final bytes = await _avatarStore.readAvatarBytes(deviceId);
     if (bytes == null || bytes.isEmpty) {
+      logAvatarDiag('GET miss deviceId=$deviceId status=404');
       return _error(404, 'AVATAR_NOT_FOUND', 'Device avatar was not found');
+    }
+
+    final updatedAt = await _avatarStore.readUpdatedAt(deviceId);
+    final etag = updatedAt == null
+        ? null
+        : '"${updatedAt.toUtc().millisecondsSinceEpoch}"';
+    final ifNoneMatch = request.headers['if-none-match']?.trim();
+    if (etag != null && ifNoneMatch != null && ifNoneMatch == etag) {
+      logAvatarDiag(
+        'GET deviceId=$deviceId status=304 '
+        'updatedAt=${updatedAt?.toUtc().toIso8601String() ?? 'null'} '
+        'etag=$etag ifNoneMatch=$ifNoneMatch',
+      );
+      return Response.notModified(
+        headers: <String, String>{
+          'ETag': etag,
+          'Cache-Control': 'private, no-cache, must-revalidate',
+          if (updatedAt != null)
+            'Last-Modified': HttpDate.format(updatedAt.toUtc()),
+          if (updatedAt != null)
+            'X-Avatar-Updated-At': updatedAt.toUtc().toIso8601String(),
+        },
+      );
     }
 
     final contentType = bytes.length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xD8
         ? 'image/jpeg'
         : 'image/png';
+    logAvatarDiag(
+      'GET deviceId=$deviceId status=200 bytes=${bytes.length} '
+      'updatedAt=${updatedAt?.toUtc().toIso8601String() ?? 'null'} '
+      'etag=${etag ?? 'null'} contentType=$contentType',
+    );
     return Response.ok(
       bytes,
-      headers: {
+      headers: <String, String>{
         'Content-Type': contentType,
-        'Cache-Control': 'private, max-age=300',
+        // Diagnostic/fix: do not allow 5-minute stale avatar caches.
+        // Clients should also pass ?v={avatarUpdatedAt} as a cache buster.
+        'Cache-Control': 'private, no-cache, must-revalidate',
+        if (etag != null) 'ETag': etag,
+        if (updatedAt != null)
+          'Last-Modified': HttpDate.format(updatedAt.toUtc()),
+        if (updatedAt != null)
+          'X-Avatar-Updated-At': updatedAt.toUtc().toIso8601String(),
       },
     );
   }

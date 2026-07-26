@@ -4,6 +4,7 @@
 // 文件包含：RealtimeStatusPublisher
 import 'dart:async';
 
+import '../../../core/debug/avatar_diag_log.dart';
 import '../../../core/runtime/runtime_presence_bridge.dart';
 import '../../api/handlers/dashboard_payload_builder.dart';
 import '../realtime_contract.dart';
@@ -89,17 +90,40 @@ class RealtimeStatusPublisher {
       ),
     );
 
+    final connectionCount = _connectionRegistry.connections.length;
     if (!_connectionRegistry.hasConnections) {
+      logAvatarDiag(
+        'presence.changed skip reason=no_connections '
+        'connectionCount=$connectionCount',
+      );
       return;
     }
 
+    final clients = _presenceRepository.snapshot();
     final payload = <String, dynamic>{
-      'clients': _presenceRepository.snapshot(),
+      'clients': clients,
     };
     final enrolledIds = await _loadEnrolledDeviceIds();
     if (enrolledIds != null) {
       payload['enrolledDeviceIds'] = enrolledIds;
     }
+
+    final avatarSummary = clients
+        .map((client) {
+          final deviceId = '${client['deviceId'] ?? ''}'.trim();
+          if (deviceId.isEmpty) {
+            return null;
+          }
+          final updatedAt = client['avatarUpdatedAt'];
+          return '$deviceId.avatarUpdatedAt=${updatedAt ?? 'null'}';
+        })
+        .whereType<String>()
+        .join(' ');
+    logAvatarDiag(
+      'presence.changed broadcast connections=$connectionCount '
+      'clients=${clients.length} '
+      '${avatarSummary.isEmpty ? 'avatars=none' : avatarSummary}',
+    );
 
     _eventHub.broadcast(
       type: RealtimeMessageType.presenceChanged,

@@ -19,12 +19,14 @@ class ServerDeviceIdentityService {
     required DeviceInfoService deviceInfoService,
     RealtimePresenceRepository? presenceRepository,
     Future<void> Function(String broadcastName)? onBroadcastNameChanged,
+    void Function()? onProfileChanged,
   }) : _deviceStore = deviceStore,
        _avatarStore = avatarStore,
        _identityStore = identityStore,
        _deviceInfoService = deviceInfoService,
        _presenceRepository = presenceRepository,
-       _onBroadcastNameChanged = onBroadcastNameChanged;
+       _onBroadcastNameChanged = onBroadcastNameChanged,
+       _onProfileChanged = onProfileChanged;
 
   static const String kDefaultProductServerName =
       DeviceInfoService.defaultProductServerName;
@@ -35,6 +37,7 @@ class ServerDeviceIdentityService {
   final DeviceInfoService _deviceInfoService;
   final RealtimePresenceRepository? _presenceRepository;
   final Future<void> Function(String broadcastName)? _onBroadcastNameChanged;
+  final void Function()? _onProfileChanged;
 
   String? get localAlias => _identityStore.displayAlias;
 
@@ -152,6 +155,7 @@ class ServerDeviceIdentityService {
     );
     await _identityStore.markAvatarSynced(updatedAt);
     await _refreshPresence(host);
+    _onProfileChanged?.call();
   }
 
   Future<void> clearAvatar() async {
@@ -160,6 +164,7 @@ class ServerDeviceIdentityService {
     if (host != null) {
       await _avatarStore.deleteAvatar(host.deviceId);
       await _refreshPresence(host);
+      _onProfileChanged?.call();
     }
   }
 
