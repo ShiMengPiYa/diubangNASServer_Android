@@ -5,7 +5,7 @@ repository: https://github.com/DianDanHuaJuan/diubangNASServer_Android
 homepage: https://github.com/DianDanHuaJuan/diubangNASServer_Android
 issue_tracker: https://github.com/DianDanHuaJuan/diubangNASServer_Android/issues
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.10.7
