@@ -41,6 +41,8 @@ class FileListHandler {
         cursor: request.url.queryParameters['cursor'],
         limit: limit,
         category: request.url.queryParameters['category'],
+        sortBy: request.url.queryParameters['sortBy'],
+        sortOrder: request.url.queryParameters['sortOrder'],
       );
 
       return Response.ok(

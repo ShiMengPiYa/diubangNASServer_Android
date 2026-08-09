@@ -85,9 +85,17 @@ class FileIndexService {
     String? cursor,
     required int limit,
     String? category,
+    String? sortBy,
+    String? sortOrder,
   }) async {
     await _ensureInitialIndexReady();
-    return _listFiles(cursor: cursor, limit: limit, category: category);
+    return _listFiles(
+      cursor: cursor,
+      limit: limit,
+      category: category,
+      sortBy: sortBy,
+      sortOrder: sortOrder,
+    );
   }
 
   Future<void> _ensureInitialIndexReady() async {
@@ -107,6 +115,8 @@ class FileIndexService {
     String? cursor,
     required int limit,
     String? category,
+    String? sortBy,
+    String? sortOrder,
     bool allowRepair = true,
   }) async {
     final database = await _requireDatabase();
@@ -129,7 +139,7 @@ class FileIndexService {
       ],
       where: where,
       whereArgs: whereArgs,
-      orderBy: 'modified_ms DESC, relative_path COLLATE NOCASE ASC',
+      orderBy: _buildOrderBy(sortBy, sortOrder),
       limit: normalizedLimit + 1,
       offset: offset,
     );
@@ -140,6 +150,8 @@ class FileIndexService {
         cursor: cursor,
         limit: limit,
         category: category,
+        sortBy: sortBy,
+        sortOrder: sortOrder,
         allowRepair: false,
       );
     }
@@ -244,7 +256,7 @@ class FileIndexService {
     _database = await _databaseFactory.openDatabase(
       _databasePath,
       options: sqflite.OpenDatabaseOptions(
-        version: 1,
+        version: 2,
         onCreate: (database, _) async {
           await database.execute('''
 CREATE TABLE indexed_files (
@@ -265,6 +277,26 @@ ON indexed_files(modified_ms DESC, relative_path COLLATE NOCASE ASC)
 CREATE INDEX idx_indexed_files_category_order
 ON indexed_files(category, modified_ms DESC, relative_path COLLATE NOCASE ASC)
 ''');
+          await database.execute('''
+CREATE INDEX idx_indexed_files_size_order
+ON indexed_files(size_bytes DESC, relative_path COLLATE NOCASE ASC)
+''');
+          await database.execute('''
+CREATE INDEX idx_indexed_files_category_size_order
+ON indexed_files(category, size_bytes DESC, relative_path COLLATE NOCASE ASC)
+''');
+        },
+        onUpgrade: (database, oldVersion, newVersion) async {
+          if (oldVersion < 2) {
+            await database.execute('''
+CREATE INDEX IF NOT EXISTS idx_indexed_files_size_order
+ON indexed_files(size_bytes DESC, relative_path COLLATE NOCASE ASC)
+''');
+            await database.execute('''
+CREATE INDEX IF NOT EXISTS idx_indexed_files_category_size_order
+ON indexed_files(category, size_bytes DESC, relative_path COLLATE NOCASE ASC)
+''');
+          }
         },
       ),
     );
@@ -301,6 +333,21 @@ ON indexed_files(category, modified_ms DESC, relative_path COLLATE NOCASE ASC)
         return category;
     }
     throw const FormatException('Invalid category');
+  }
+
+  /// 构建 ORDER BY 子句。白名单校验防 SQL 注入。
+  /// sortBy: 'modified' -> modified_ms, 'size' -> size_bytes
+  /// sortOrder: 'asc' | 'desc'
+  /// 默认: modified_ms DESC, relative_path COLLATE NOCASE ASC
+  String _buildOrderBy(String? sortBy, String? sortOrder) {
+    const columnFor = {
+      'modified': 'modified_ms',
+      'size': 'size_bytes',
+    };
+    final column = columnFor[sortBy] ?? 'modified_ms';
+    final direction =
+        (sortOrder?.toLowerCase() == 'asc') ? 'ASC' : 'DESC';
+    return '$column $direction, relative_path COLLATE NOCASE ASC';
   }
 
   Future<List<_IndexedFileRecord>> _scanFilesWithCancellation({

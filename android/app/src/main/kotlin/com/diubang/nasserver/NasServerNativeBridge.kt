@@ -9,6 +9,7 @@ import android.database.ContentObserver
 import android.database.Cursor
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.media.ThumbnailUtils
 import android.net.Uri
 import android.net.nsd.NsdManager
@@ -23,6 +24,7 @@ import android.os.StatFs
 import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Size
+import android.webkit.MimeTypeMap
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
@@ -266,6 +268,7 @@ class NasServerNativeBridge(
                 "brand" to Build.BRAND,
                 "manufacturer" to Build.MANUFACTURER,
                 "systemVersion" to Build.VERSION.RELEASE,
+                "sdkInt" to Build.VERSION.SDK_INT,
                 "batteryLevel" to batteryStatus.first,
                 "batteryPercent" to batteryStatus.second,
                 "isCharging" to batteryStatus.third,
@@ -278,6 +281,7 @@ class NasServerNativeBridge(
                 "brand" to "Unknown",
                 "manufacturer" to "Unknown",
                 "systemVersion" to "Unknown",
+                "sdkInt" to Build.VERSION.SDK_INT,
                 "batteryLevel" to 0,
                 "batteryPercent" to 0.0,
                 "isCharging" to false,
@@ -639,8 +643,9 @@ class NasServerNativeBridge(
 
             val thumbnail: Bitmap? =
                 if (isVideo) {
-                    val videoThumbnail = ThumbnailUtils.createVideoThumbnail(file, Size(size, size), null)
-                    videoThumbnail?.let { prepareBitmapForThumbnail(it, size, cropSquare) }
+                    createVideoThumbnailBitmap(file, size)?.let {
+                        prepareBitmapForThumbnail(it, size, cropSquare)
+                    }
                 } else {
                     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     BitmapFactory.decodeFile(file.absolutePath, options)
@@ -681,8 +686,27 @@ class NasServerNativeBridge(
                     "error" to "Failed to generate thumbnail",
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             mapOf("bytes" to listOf<Byte>(), "success" to false, "error" to e.message)
+        }
+    }
+
+    /**
+     * API 29+ File/Size overload; older devices use the deprecated path+kind overload
+     * (available since API 8) so Android 8 does not hit NoSuchMethodError.
+     */
+    private fun createVideoThumbnailBitmap(
+        file: File,
+        size: Int,
+    ): Bitmap? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ThumbnailUtils.createVideoThumbnail(file, Size(size, size), null)
+        } else {
+            @Suppress("DEPRECATION")
+            ThumbnailUtils.createVideoThumbnail(
+                file.absolutePath,
+                MediaStore.Images.Thumbnails.MINI_KIND,
+            )
         }
     }
 
@@ -698,31 +722,12 @@ class NasServerNativeBridge(
                     val rawThumbnail =
                         appContext.contentResolver.loadThumbnail(uri, Size(size, size), null)
                     prepareBitmapForThumbnail(rawThumbnail, size, cropSquare)
-                } else {
-                    val pfd: ParcelFileDescriptor? =
-                        appContext.contentResolver.openFileDescriptor(uri, "r")
-                    pfd?.let {
-                        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                        BitmapFactory.decodeFileDescriptor(it.fileDescriptor, null, options)
-
-                        val originalWidth = options.outWidth
-                        val originalHeight = options.outHeight
-
-                        val scaleFactor =
-                            maxOf(originalWidth / size, originalHeight / size).coerceAtLeast(1)
-
-                        options.apply {
-                            inJustDecodeBounds = false
-                            inSampleSize = scaleFactor
-                        }
-
-                        val bitmap =
-                            BitmapFactory.decodeFileDescriptor(it.fileDescriptor, null, options)
-                        it.close()
-                        bitmap?.let { decoded ->
-                            prepareBitmapForThumbnail(decoded, size, cropSquare)
-                        }
+                } else if (isVideoContentUri(uri)) {
+                    extractVideoFrameFromUri(uri)?.let { frame ->
+                        prepareBitmapForThumbnail(frame, size, cropSquare)
                     }
+                } else {
+                    decodeImageThumbnailFromUri(uri, size, cropSquare)
                 }
 
             if (thumbnail != null) {
@@ -739,8 +744,72 @@ class NasServerNativeBridge(
                     "error" to "Failed to generate thumbnail from URI",
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             mapOf("bytes" to listOf<Byte>(), "success" to false, "error" to e.message)
+        }
+    }
+
+    private fun isVideoContentUri(uri: Uri): Boolean {
+        val mime = appContext.contentResolver.getType(uri)?.lowercase()
+        if (mime != null) {
+            return mime.startsWith("video/")
+        }
+        val path = uri.path?.lowercase().orEmpty()
+        if (path.contains("/video")) {
+            return true
+        }
+        val extension = MimeTypeMap.getFileExtensionFromUrl(uri.toString())?.lowercase()
+        return extension in listOf("mp4", "mkv", "avi", "mov", "webm", "3gp")
+    }
+
+    private fun extractVideoFrameFromUri(uri: Uri): Bitmap? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(appContext, uri)
+            val embedded = retriever.embeddedPicture
+            if (embedded != null) {
+                val embeddedBitmap =
+                    BitmapFactory.decodeByteArray(embedded, 0, embedded.size)
+                if (embeddedBitmap != null) {
+                    return embeddedBitmap
+                }
+            }
+            retriever.frameAtTime
+        } catch (_: Throwable) {
+            null
+        } finally {
+            try {
+                retriever.release()
+            } catch (_: Throwable) {
+                // ignore
+            }
+        }
+    }
+
+    private fun decodeImageThumbnailFromUri(
+        uri: Uri,
+        size: Int,
+        cropSquare: Boolean,
+    ): Bitmap? {
+        val pfd: ParcelFileDescriptor =
+            appContext.contentResolver.openFileDescriptor(uri, "r") ?: return null
+        return pfd.use {
+            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFileDescriptor(it.fileDescriptor, null, options)
+
+            val originalWidth = options.outWidth
+            val originalHeight = options.outHeight
+            val scaleFactor =
+                maxOf(originalWidth / size, originalHeight / size).coerceAtLeast(1)
+
+            options.apply {
+                inJustDecodeBounds = false
+                inSampleSize = scaleFactor
+            }
+
+            BitmapFactory.decodeFileDescriptor(it.fileDescriptor, null, options)?.let { decoded ->
+                prepareBitmapForThumbnail(decoded, size, cropSquare)
+            }
         }
     }
 
