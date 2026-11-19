@@ -12,7 +12,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '11'
-      - run: chmod +x gradlew
+      
       - run: |
           sed -i 's/mavenCentral()/maven { url "https://maven.aliyun.com/repository/public" }\nmavenCentral()/g' build.gradle
           sed -i 's/google()/maven { url "https://maven.aliyun.com/repository/google" }\ngoogle()/g' build.gradle
